@@ -59,6 +59,11 @@ export default function Home() {
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteSaveSuccess, setNoteSaveSuccess] = useState(false);
   const [isNoteExpanded, setIsNoteExpanded] = useState(false);
+  const [globalNote, setGlobalNote] = useState(""); // 全局备注状态
+  const [globalNoteLoading, setGlobalNoteLoading] = useState(false); // 全局备注加载状态
+  const [globalNoteSaving, setGlobalNoteSaving] = useState(false); // 全局备注保存状态
+  const [globalNoteSaveSuccess, setGlobalNoteSaveSuccess] = useState(false); // 全局备注保存成功状态
+  const [isGlobalNoteExpanded, setIsGlobalNoteExpanded] = useState(false); // 全局备注展开状态
 
   const loadTrades = useCallback(async () => {
     try {
@@ -126,11 +131,40 @@ export default function Home() {
     }
   }, []);
 
+  const loadGlobalNote = useCallback(async () => {
+    setGlobalNoteLoading(true);
+    try {
+      const noteData = await fetchNote("GLOBAL"); // 使用特殊标识符GLOBAL表示全局备注
+      setGlobalNote(noteData.note);
+    } catch (err) {
+      console.error("Error fetching global note:", err);
+      setGlobalNote("");
+    } finally {
+      setGlobalNoteLoading(false);
+    }
+  }, []);
+
+  const saveGlobalNoteHandler = useCallback(async (note: string) => {
+    setGlobalNoteSaving(true);
+    setGlobalNoteSaveSuccess(false);
+    try {
+      await saveNote("GLOBAL", note); // 使用特殊标识符GLOBAL表示全局备注
+      setGlobalNoteSaveSuccess(true);
+      // 3秒后隐藏成功提示
+      setTimeout(() => setGlobalNoteSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Error saving global note:", err);
+    } finally {
+      setGlobalNoteSaving(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadTrades();
     fetchPreviousClose(symbol);
     loadNote(symbol);
-  }, [loadTrades, fetchPreviousClose, loadNote, symbol]);
+    loadGlobalNote(); // 加载全局备注
+  }, [loadTrades, fetchPreviousClose, loadNote, loadGlobalNote, symbol]);
 
   const handleSearch = () => {
     loadTrades();
@@ -154,9 +188,75 @@ export default function Home() {
     setIsNoteExpanded(!isNoteExpanded);
   };
 
+  const handleGlobalNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setGlobalNote(e.target.value);
+  };
+
+  const handleSaveGlobalNote = () => {
+    saveGlobalNoteHandler(globalNote);
+  };
+
+  const toggleGlobalNoteExpand = () => {
+    setIsGlobalNoteExpanded(!isGlobalNoteExpanded);
+  };
+
   return (
     <div className="font-sans p-8 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">{symbol} 交易数据展示</h1>
+      <div className="flex items-center justify-between mb-6">
+  <h1 className="text-3xl font-bold text-gray-800">{symbol} 交易数据展示</h1>
+  {/* 全局备注区域 */}
+  <div className="lg:w-1/3">
+    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200 h-fit">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-800">全局备注</h2>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={toggleGlobalNoteExpand}
+            className="text-purple-700 hover:text-purple-900 focus:outline-none"
+          >
+            {isGlobalNoteExpanded ? "收起" : "展开"}
+          </button>
+        </div>
+      </div>
+      
+      {isGlobalNoteExpanded && (
+        <>
+          {globalNoteLoading ? (
+            <p className="mt-2">加载备注中...</p>
+          ) : (
+            <div className="mt-2">
+              <textarea
+                value={globalNote}
+                onChange={handleGlobalNoteChange}
+                rows={6}
+                className="w-full p-2 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="添加全局备注..."
+              />
+              <div className="mt-2 flex justify-end">
+                {globalNoteSaveSuccess && (
+                  <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
+                    备注保存成功！
+                  </span>
+                )}
+                <button
+                  onClick={handleSaveGlobalNote}
+                  disabled={globalNoteSaving}
+                  className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    globalNoteSaving 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-purple-500 hover:bg-purple-600 text-white"
+                  }`}
+                >
+                  {globalNoteSaving ? "保存中..." : "保存备注"}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  </div>
+</div>
       
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
         <div className="flex flex-wrap items-end gap-4">
@@ -242,101 +342,101 @@ export default function Home() {
         </div>
       ) : (
         <>
-          {/* 显示股票描述 */}
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg">
-            <p className="text-gray-800">
-              <span className="font-semibold">{symbol}：</span>
-              {STOCK_DESCRIPTIONS[symbol] || "暂无描述信息"}
-            </p>
-          </div>
-          
-          {/* 显示和编辑备注 */}
-          <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-800">备注</h2>
-              <button 
-                onClick={toggleNoteExpand}
-                className="text-yellow-700 hover:text-yellow-900 focus:outline-none"
-              >
-                {isNoteExpanded ? "收起" : "展开"}
-              </button>
-            </div>
-            
-            {isNoteExpanded && (
-              <>
-                {noteLoading ? (
-                  <p className="mt-2">加载备注中...</p>
-                ) : (
-                  <div className="mt-2">
-                    <textarea
-                      value={note}
-                      onChange={handleNoteChange}
-                      rows={3}
-                      className="w-full p-2 border border-yellow-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                      placeholder="为这个股票添加备注..."
-                    />
-                    <div className="mt-2 flex justify-end">
-                      {noteSaveSuccess && (
-                        <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
-                          备注保存成功！
-                        </span>
-                      )}
-                      <button
-                        onClick={handleSaveNote}
-                        disabled={noteSaving}
-                        className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 ${
-                          noteSaving 
-                            ? "bg-gray-400 cursor-not-allowed" 
-                            : "bg-yellow-500 hover:bg-yellow-600 text-white"
-                        }`}
-                      >
-                        {noteSaving ? "保存中..." : "保存备注"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-300 rounded-lg">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="py-3 px-4 text-center border-b border-gray-300">日期</th>
-                  <th className="py-3 px-4 text-center border-b border-gray-300">基金</th>
-                  <th className="py-3 px-4 text-center border-b border-gray-300">方向</th>
-                  <th className="py-3 px-4 text-center border-b border-gray-300">收盘价</th>
-                  <th className="py-3 px-4 text-center border-b border-gray-300">股数</th>
-                  <th className="py-3 px-4 text-center border-b border-gray-300">ETF占比(%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trades.map((trade, index) => (
-                  <tr 
-                    key={index} 
-                    className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+              {/* 显示股票描述 */}
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                <p className="text-gray-800">
+                  <span className="font-semibold">{symbol}：</span>
+                  {STOCK_DESCRIPTIONS[symbol] || "暂无描述信息"}
+                </p>
+              </div>
+              
+              {/* 显示和编辑备注 */}
+              <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-semibold text-gray-800">备注</h2>
+                  <button 
+                    onClick={toggleNoteExpand}
+                    className="text-yellow-700 hover:text-yellow-900 focus:outline-none"
                   >
-                    <td className="py-3 px-4 border-b border-gray-300">{trade.date || ""}</td>
-                    <td className="py-3 px-4 border-b border-gray-300">{trade.fund || ""}</td>
-                    <td 
-                      className={`py-3 px-4 border-b border-gray-300 ${
-                        trade.direction === "Buy" 
-                          ? "bg-yellow-100" 
-                          : trade.direction === "Sell" 
-                            ? "bg-orange-100" 
-                            : ""
-                      }`}
-                    >
-                      {trade.direction || ""}
-                    </td>
-                    <td className="py-3 px-4 border-b border-gray-300">{trade.close ? trade.close.toFixed(2) : ""}</td>
-                    <td className="py-3 px-4 border-b border-gray-300">{trade.shares || ""}</td>
-                    <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent || ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    {isNoteExpanded ? "收起" : "展开"}
+                  </button>
+                </div>
+                
+                {isNoteExpanded && (
+                  <>
+                    {noteLoading ? (
+                      <p className="mt-2">加载备注中...</p>
+                    ) : (
+                      <div className="mt-2">
+                        <textarea
+                          value={note}
+                          onChange={handleNoteChange}
+                          rows={3}
+                          className="w-full p-2 border border-yellow-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                          placeholder="为这个股票添加备注..."
+                        />
+                        <div className="mt-2 flex justify-end">
+                          {noteSaveSuccess && (
+                            <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
+                              备注保存成功！
+                            </span>
+                          )}
+                          <button
+                            onClick={handleSaveNote}
+                            disabled={noteSaving}
+                            className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 ${
+                              noteSaving 
+                                ? "bg-gray-400 cursor-not-allowed" 
+                                : "bg-yellow-500 hover:bg-yellow-600 text-white"
+                            }`}
+                          >
+                            {noteSaving ? "保存中..." : "保存备注"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-300 rounded-lg">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="py-3 px-4 text-center border-b border-gray-300">日期</th>
+                      <th className="py-3 px-4 text-center border-b border-gray-300">基金</th>
+                      <th className="py-3 px-4 text-center border-b border-gray-300">方向</th>
+                      <th className="py-3 px-4 text-center border-b border-gray-300">收盘价</th>
+                      <th className="py-3 px-4 text-center border-b border-gray-300">股数</th>
+                      <th className="py-3 px-4 text-center border-b border-gray-300">ETF占比(%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trades.map((trade, index) => (
+                      <tr 
+                        key={index} 
+                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td className="py-3 px-4 border-b border-gray-300">{trade.date || ""}</td>
+                        <td className="py-3 px-4 border-b border-gray-300">{trade.fund || ""}</td>
+                        <td 
+                          className={`py-3 px-4 border-b border-gray-300 ${
+                            trade.direction === "Buy" 
+                              ? "bg-yellow-100" 
+                              : trade.direction === "Sell" 
+                                ? "bg-orange-100" 
+                                : ""
+                          }`}
+                        >
+                          {trade.direction || ""}
+                        </td>
+                        <td className="py-3 px-4 border-b border-gray-300">{trade.close ? trade.close.toFixed(2) : ""}</td>
+                        <td className="py-3 px-4 border-b border-gray-300">{trade.shares || ""}</td>
+                        <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent || ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
           </div>
         </>
       )}
