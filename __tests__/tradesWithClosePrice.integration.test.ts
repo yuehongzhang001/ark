@@ -50,7 +50,7 @@ async function runTradesWithClosePriceIntegrationTest() {
     ];
 
     // 动态导入 tradesWithClosePrice 方法
-    const tradeModule = await import('../app/api/trades/route');
+    const tradeModule = await import('../app/service/server/tradesService');
     const tradesWithClosePrice: (symbol: string, trades: Trade[]) => Promise<Trade[]> = tradeModule.tradesWithClosePrice;
 
     // 调用待测方法
