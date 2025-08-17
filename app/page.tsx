@@ -50,8 +50,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState("CAI");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [year, setYear] = useState<string>("all");
   const [previousClose, setPreviousClose] = useState<number | null>(null);
   const [prevCloseLoading, setPrevCloseLoading] = useState(false);
   const [note, setNote] = useState("");
@@ -69,16 +68,27 @@ export default function Home() {
     try {
       setLoading(true);
       setError(null);
+      
+      // 根据选择的年份设置日期范围
+      let dateFrom = "";
+      let dateTo = "";
+      
+      if (year !== "all") {
+        dateFrom = `${year}-01-01`;
+        dateTo = `${year}-12-31`;
+      }
+      
       console.log("Fetching trades for symbol:", symbol, "from:", dateFrom, "to:", dateTo);
       const data = await fetchTrades(symbol, dateFrom, dateTo);
       setTrades(data.trades);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch data");
+      setTrades([]); // 确保在错误情况下清空交易数据
       console.error("Error fetching trades for symbol:", symbol, err);
     } finally {
       setLoading(false);
     }
-  }, [symbol, dateFrom, dateTo]);
+  }, [symbol, year]);
 
   const fetchPreviousClose = useCallback(async (symbol: string) => {
     setPrevCloseLoading(true);
@@ -164,11 +174,17 @@ export default function Home() {
     fetchPreviousClose(symbol);
     loadNote(symbol);
     loadGlobalNote(); // 加载全局备注
-  }, [loadTrades, fetchPreviousClose, loadNote, loadGlobalNote, symbol]);
+  }, [loadTrades, fetchPreviousClose, loadNote, loadGlobalNote, symbol, year]);
 
-  const handleSearch = () => {
-    loadTrades();
-    fetchPreviousClose(symbol);
+  const handleSymbolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    console.log("Selected symbol:", e.target.value);
+    setSymbol(e.target.value);
+    // 切换股票时将年份重置为所有年份
+    setYear("all");
+  };
+
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setYear(e.target.value);
   };
 
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -177,11 +193,6 @@ export default function Home() {
 
   const handleSaveNote = () => {
     saveNoteHandler(symbol, note);
-  };
-
-  const handleSymbolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    console.log("Selected symbol:", e.target.value);
-    setSymbol(e.target.value);
   };
 
   const toggleNoteExpand = () => {
@@ -276,31 +287,21 @@ export default function Home() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">开始日期:</label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+            <label className="block text-sm font-medium text-gray-700 mb-1">年份:</label>
+            <select
+              value={year}
+              onChange={handleYearChange}
               className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            >
+              <option value="all">所有年份</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="2021">2021</option>
+              <option value="2020">2020</option>
+            </select>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">结束日期:</label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <button
-            onClick={handleSearch}
-            className="h-fit px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            查询
-          </button>
           
           {trades.length > 0 && (() => {
             const closes = trades
@@ -399,45 +400,51 @@ export default function Home() {
                 )}
               </div>
               
-              <div className="overflow-x-auto">
-                <table className="min-w-full bg-white border border-gray-300 rounded-lg">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="py-3 px-4 text-center border-b border-gray-300">日期</th>
-                      <th className="py-3 px-4 text-center border-b border-gray-300">基金</th>
-                      <th className="py-3 px-4 text-center border-b border-gray-300">方向</th>
-                      <th className="py-3 px-4 text-center border-b border-gray-300">收盘价</th>
-                      <th className="py-3 px-4 text-center border-b border-gray-300">股数</th>
-                      <th className="py-3 px-4 text-center border-b border-gray-300">ETF占比(%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trades.map((trade, index) => (
-                      <tr 
-                        key={index} 
-                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                      >
-                        <td className="py-3 px-4 border-b border-gray-300">{trade.date || ""}</td>
-                        <td className="py-3 px-4 border-b border-gray-300">{trade.fund || ""}</td>
-                        <td 
-                          className={`py-3 px-4 border-b border-gray-300 ${
-                            trade.direction === "Buy" 
-                              ? "bg-yellow-100" 
-                              : trade.direction === "Sell" 
-                                ? "bg-orange-100" 
-                                : ""
-                          }`}
-                        >
-                          {trade.direction || ""}
-                        </td>
-                        <td className="py-3 px-4 border-b border-gray-300">{trade.close ? trade.close.toFixed(2) : ""}</td>
-                        <td className="py-3 px-4 border-b border-gray-300">{trade.shares || ""}</td>
-                        <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent || ""}</td>
+              {trades.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>该年份没有交易数据</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full bg-white border border-gray-300 rounded-lg">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="py-3 px-4 text-center border-b border-gray-300">日期</th>
+                        <th className="py-3 px-4 text-center border-b border-gray-300">基金</th>
+                        <th className="py-3 px-4 text-center border-b border-gray-300">方向</th>
+                        <th className="py-3 px-4 text-center border-b border-gray-300">收盘价</th>
+                        <th className="py-3 px-4 text-center border-b border-gray-300">股数</th>
+                        <th className="py-3 px-4 text-center border-b border-gray-300">ETF占比(%)</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-          </div>
+                    </thead>
+                    <tbody>
+                      {trades.map((trade, index) => (
+                        <tr 
+                          key={index} 
+                          className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                        >
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.date || ""}</td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.fund || ""}</td>
+                          <td 
+                            className={`py-3 px-4 border-b border-gray-300 ${
+                              trade.direction === "Buy" 
+                                ? "bg-yellow-100" 
+                                : trade.direction === "Sell" 
+                                  ? "bg-orange-100" 
+                                  : ""
+                            }`}
+                          >
+                            {trade.direction || ""}
+                          </td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.close ? trade.close.toFixed(2) : ""}</td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.shares || ""}</td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent || ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
         </>
       )}
     </div>

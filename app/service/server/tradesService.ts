@@ -14,6 +14,11 @@ export async function tradesWithClosePrice(symbol: string, trades: any[]) {
   // 获取价格数据
   console.log(`Fetching price data from database for ${symbol} for ${trades.length} trades`);
   
+  // 如果没有交易数据，则直接返回
+  if (trades.length === 0) {
+    return trades;
+  }
+  
   // 获取所有交易日期
   const dates = trades.map(trade => new Date(trade.date));
   const minDate = new Date(Math.min(...dates.map(date => date.getTime())));
