@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { fetchTrades, type Trade } from "./service/tradeService";
+import {fetchTrades, type Trade, fetchNote, saveNote } from "./service/client/tradeService";
 
 // 定义股票代码和描述的数据结构
 const STOCK_DESCRIPTIONS: Record<string, string> = {
@@ -41,6 +41,11 @@ export default function Home() {
   const [dateTo, setDateTo] = useState("");
   const [previousClose, setPreviousClose] = useState<number | null>(null);
   const [prevCloseLoading, setPrevCloseLoading] = useState(false);
+  const [note, setNote] = useState("");
+  const [noteLoading, setNoteLoading] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSaveSuccess, setNoteSaveSuccess] = useState(false);
+  const [isNoteExpanded, setIsNoteExpanded] = useState(false);
 
   const loadTrades = useCallback(async () => {
     try {
@@ -80,19 +85,60 @@ export default function Home() {
     }
   }, []);
 
+  const loadNote = useCallback(async (symbol: string) => {
+    setNoteLoading(true);
+    try {
+      const noteData = await fetchNote(symbol);
+      setNote(noteData.note);
+    } catch (err) {
+      console.error("Error fetching note:", err);
+      setNote("");
+    } finally {
+      setNoteLoading(false);
+    }
+  }, []);
+
+  const saveNoteHandler = useCallback(async (symbol: string, note: string) => {
+    setNoteSaving(true);
+    setNoteSaveSuccess(false);
+    try {
+      await saveNote(symbol, note);
+      setNoteSaveSuccess(true);
+      // 3秒后隐藏成功提示
+      setTimeout(() => setNoteSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Error saving note:", err);
+    } finally {
+      setNoteSaving(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadTrades();
     fetchPreviousClose(symbol);
-  }, [loadTrades, fetchPreviousClose, symbol]);
+    loadNote(symbol);
+  }, [loadTrades, fetchPreviousClose, loadNote, symbol]);
 
   const handleSearch = () => {
     loadTrades();
     fetchPreviousClose(symbol);
   };
 
+  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNote(e.target.value);
+  };
+
+  const handleSaveNote = () => {
+    saveNoteHandler(symbol, note);
+  };
+
   const handleSymbolChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     console.log("Selected symbol:", e.target.value);
     setSymbol(e.target.value);
+  };
+
+  const toggleNoteExpand = () => {
+    setIsNoteExpanded(!isNoteExpanded);
   };
 
   return (
@@ -189,6 +235,55 @@ export default function Home() {
               <span className="font-semibold">{symbol}：</span>
               {STOCK_DESCRIPTIONS[symbol] || "暂无描述信息"}
             </p>
+          </div>
+          
+          {/* 显示和编辑备注 */}
+          <div className="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-gray-800">备注</h2>
+              <button 
+                onClick={toggleNoteExpand}
+                className="text-yellow-700 hover:text-yellow-900 focus:outline-none"
+              >
+                {isNoteExpanded ? "收起" : "展开"}
+              </button>
+            </div>
+            
+            {isNoteExpanded && (
+              <>
+                {noteLoading ? (
+                  <p className="mt-2">加载备注中...</p>
+                ) : (
+                  <div className="mt-2">
+                    <textarea
+                      value={note}
+                      onChange={handleNoteChange}
+                      rows={3}
+                      className="w-full p-2 border border-yellow-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      placeholder="为这个股票添加备注..."
+                    />
+                    <div className="mt-2 flex justify-end">
+                      {noteSaveSuccess && (
+                        <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
+                          备注保存成功！
+                        </span>
+                      )}
+                      <button
+                        onClick={handleSaveNote}
+                        disabled={noteSaving}
+                        className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 ${
+                          noteSaving 
+                            ? "bg-gray-400 cursor-not-allowed" 
+                            : "bg-yellow-500 hover:bg-yellow-600 text-white"
+                        }`}
+                      >
+                        {noteSaving ? "保存中..." : "保存备注"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           
           <div className="overflow-x-auto">

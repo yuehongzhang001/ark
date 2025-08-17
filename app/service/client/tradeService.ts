@@ -1,5 +1,4 @@
 
-
 export interface Trade {
   date: string;
   fund: string;
@@ -40,5 +39,55 @@ export async function fetchTrades(
     throw new Error(`Failed to fetch trades: ${response.status} ${response.statusText}`);
   }
   
+  return response.json();
+}
+
+/**
+ * Fetch note for a specific symbol
+ * @param symbol Stock symbol
+ * @returns Note for the symbol
+ */
+export async function fetchNote(symbol: string): Promise<{ symbol: string; note: string }> {
+  const response = await fetch(`/api/notes?symbol=${symbol}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch note: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Save note for a specific symbol
+ * @param symbol Stock symbol
+ * @param note Note content to save
+ * @returns Saved note
+ */
+export async function saveNote(symbol: string, note: string): Promise<{ symbol: string; note: string }> {
+  const response = await fetch('/api/notes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ symbol, note }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to save note: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Delete note for a specific symbol
+ * @param symbol Stock symbol
+ * @returns Deletion result
+ */
+export async function deleteNote(symbol: string): Promise<{ message: string }> {
+  const response = await fetch(`/api/notes?symbol=${symbol}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete note: ${response.status} ${response.statusText}`);
+  }
   return response.json();
 }
