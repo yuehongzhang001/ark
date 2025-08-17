@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {fetchTrades, type Trade, fetchNote, saveNote } from "./service/client/tradeService";
 
 // 定义股票代码和描述的数据结构
@@ -63,6 +63,10 @@ export default function Home() {
   const [globalNoteSaving, setGlobalNoteSaving] = useState(false); // 全局备注保存状态
   const [globalNoteSaveSuccess, setGlobalNoteSaveSuccess] = useState(false); // 全局备注保存成功状态
   const [isGlobalNoteExpanded, setIsGlobalNoteExpanded] = useState(false); // 全局备注展开状态
+  
+  // 添加防抖 refs
+  const noteDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const globalNoteDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadTrades = useCallback(async () => {
     try {
@@ -132,8 +136,6 @@ export default function Home() {
     try {
       await saveNote(symbol, note);
       setNoteSaveSuccess(true);
-      // 3秒后隐藏成功提示
-      setTimeout(() => setNoteSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Error saving note:", err);
     } finally {
@@ -160,8 +162,6 @@ export default function Home() {
     try {
       await saveNote("GLOBAL", note); // 使用特殊标识符GLOBAL表示全局备注
       setGlobalNoteSaveSuccess(true);
-      // 3秒后隐藏成功提示
-      setTimeout(() => setGlobalNoteSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Error saving global note:", err);
     } finally {
@@ -188,11 +188,18 @@ export default function Home() {
   };
 
   const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNote(e.target.value);
-  };
-
-  const handleSaveNote = () => {
-    saveNoteHandler(symbol, note);
+    const newNote = e.target.value;
+    setNote(newNote);
+    
+    // 清除之前的定时器
+    if (noteDebounceRef.current) {
+      clearTimeout(noteDebounceRef.current);
+    }
+    
+    // 设置新的防抖定时器
+    noteDebounceRef.current = setTimeout(() => {
+      saveNoteHandler(symbol, newNote);
+    }, 1000); // 1秒后自动保存
   };
 
   const toggleNoteExpand = () => {
@@ -200,11 +207,18 @@ export default function Home() {
   };
 
   const handleGlobalNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setGlobalNote(e.target.value);
-  };
-
-  const handleSaveGlobalNote = () => {
-    saveGlobalNoteHandler(globalNote);
+    const newGlobalNote = e.target.value;
+    setGlobalNote(newGlobalNote);
+    
+    // 清除之前的定时器
+    if (globalNoteDebounceRef.current) {
+      clearTimeout(globalNoteDebounceRef.current);
+    }
+    
+    // 设置新的防抖定时器
+    globalNoteDebounceRef.current = setTimeout(() => {
+      saveGlobalNoteHandler(newGlobalNote);
+    }, 1000); // 1秒后自动保存
   };
 
   const toggleGlobalNoteExpand = () => {
@@ -244,22 +258,11 @@ export default function Home() {
                 placeholder="添加全局备注..."
               />
               <div className="mt-2 flex justify-end">
-                {globalNoteSaveSuccess && (
-                  <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
-                    备注保存成功！
+                {(globalNoteSaving || globalNoteSaveSuccess) && (
+                  <span className="py-2 px-3 bg-green-100 text-green-800 rounded">
+                    {globalNoteSaving ? "保存中..." : "备注已自动保存"}
                   </span>
                 )}
-                <button
-                  onClick={handleSaveGlobalNote}
-                  disabled={globalNoteSaving}
-                  className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 ${
-                    globalNoteSaving 
-                      ? "bg-gray-400 cursor-not-allowed" 
-                      : "bg-purple-500 hover:bg-purple-600 text-white"
-                  }`}
-                >
-                  {globalNoteSaving ? "保存中..." : "保存备注"}
-                </button>
               </div>
             </div>
           )}
@@ -377,22 +380,11 @@ export default function Home() {
                           placeholder="为这个股票添加备注..."
                         />
                         <div className="mt-2 flex justify-end">
-                          {noteSaveSuccess && (
-                            <span className="mr-2 py-2 px-3 bg-green-100 text-green-800 rounded">
-                              备注保存成功！
+                          {(noteSaving || noteSaveSuccess) && (
+                            <span className="py-2 px-3 bg-green-100 text-green-800 rounded">
+                              {noteSaving ? "保存中..." : "备注已自动保存"}
                             </span>
                           )}
-                          <button
-                            onClick={handleSaveNote}
-                            disabled={noteSaving}
-                            className={`px-4 py-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 ${
-                              noteSaving 
-                                ? "bg-gray-400 cursor-not-allowed" 
-                                : "bg-yellow-500 hover:bg-yellow-600 text-white"
-                            }`}
-                          >
-                            {noteSaving ? "保存中..." : "保存备注"}
-                          </button>
                         </div>
                       </div>
                     )}
