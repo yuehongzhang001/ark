@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import yahooFinance from 'yahoo-finance2';
+import { tradeCacheService } from '../../service/server/tradeCacheService';
 
 // 抑制关于historical()方法弃用的通知
 yahooFinance.suppressNotices(['ripHistorical']);
@@ -22,11 +23,25 @@ export async function GET(request: Request) {
     }
     
     const data = await response.json();
+     
+    // 打印请求的参数和获取到的交易数据
+    console.log(`Processing trades for symbol: ${symbol}`);
+    console.log(`Date range from API: ${data.date_from} to ${data.date_to}`);
+    console.log(`Number of trades: ${data.trades.length}`);
     
     // 为每个交易记录添加收盘价
     const tradesWithClosePrice = await Promise.all(
       data.trades.map(async (trade: any) => {
         try {
+          console.log(`Processing trade - Symbol: ${symbol}, Date: ${trade.date}, Fund: ${trade.fund}`);
+          
+          // 检查缓存中是否有数据
+          const cachedClosePrice = tradeCacheService.get(symbol, trade.date);
+          if (cachedClosePrice !== null) {
+            console.log(`Using cached data for ${symbol} on ${trade.date}: ${cachedClosePrice}`);
+            return { ...trade, close: cachedClosePrice };
+          }
+
           // 创建结束日期（第二天）
           const period1 = new Date(trade.date);
           const period2 = new Date(period1);
@@ -40,7 +55,14 @@ export async function GET(request: Request) {
 
           // 从返回数据中提取收盘价
           if (stockData.quotes && stockData.quotes.length > 0) {
-            return { ...trade, close: stockData.quotes[0].close };
+            const closePrice = stockData.quotes[0].close;
+            console.log(`Fetched new data for ${symbol} on ${trade.date}: ${closePrice}`);
+            
+            // 将结果存入缓存
+            tradeCacheService.set(symbol, trade.date, closePrice);
+            return { ...trade, close: closePrice };
+          } else {
+            console.log(`No stock data found for ${symbol} on ${trade.date}`);
           }
           
           return trade;
