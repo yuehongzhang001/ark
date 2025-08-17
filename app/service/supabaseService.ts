@@ -154,4 +154,41 @@ export class SupabaseService {
 
     return data;
   }
+  
+  /**
+   * Get all stock symbols with their display order
+   * @returns Array of stock symbols ordered by display_order
+   */
+  static async getStockSymbols() {
+    const { data, error } = await supabase
+      .from('stock_symbols')
+      .select('symbol, display_order')
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      throw new Error(`Error fetching stock symbols: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  /**
+   * Update stock symbols display order
+   * @param symbols Array of symbols with their new display order
+   * @returns Updated symbols
+   */
+  static async updateStockSymbolOrder(symbols: { symbol: string; display_order: number }[]) {
+    const { data, error } = await supabase
+      .from('stock_symbols')
+      .upsert(symbols, {
+        onConflict: 'symbol'
+      })
+      .select();
+
+    if (error) {
+      throw new Error(`Error updating stock symbol order: ${error.message}`);
+    }
+
+    return data;
+  }
 }
