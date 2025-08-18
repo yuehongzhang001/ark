@@ -33,9 +33,7 @@ export async function GET(request: Request) {
       ...data,
       trades: tradesWithClosePriceResult
     };
-    
-    // 打印即将返回给客户端的数据
-    console.log('Returning trades data to client:', JSON.stringify(result, null, 2));
+
     
     // 返回包含收盘价的完整数据
     return NextResponse.json(result);

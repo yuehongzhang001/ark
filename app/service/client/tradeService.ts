@@ -1,4 +1,3 @@
-
 export interface Trade {
   date: string;
   fund: string;
@@ -9,11 +8,24 @@ export interface Trade {
   symbol?: string; 
 }
 
+export interface FundWeight {
+  fund: string;
+  weight: number;
+}
+
 interface TradesResponse {
   symbol: string;
   date_from: string;
   date_to: string;
   trades: Trade[];
+}
+
+interface FundOwnershipResponse {
+  symbol: string;
+  data: {
+    date: string;
+    ownership: FundWeight[];
+  }[];
 }
 
 /**
@@ -40,6 +52,27 @@ export async function fetchTrades(
   }
   
   return response.json();
+}
+
+/**
+ * Fetch fund weights for a specific symbol
+ * @param symbol Stock symbol
+ * @returns Fund weights data
+ */
+export async function fetchFundWeights(symbol: string): Promise<FundWeight[]> {
+  const response = await fetch(`/api/weight?symbol=${symbol}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch fund weights: ${response.status} ${response.statusText}`);
+  }
+  
+  const data: FundOwnershipResponse = await response.json();
+  
+  // 获取最新的数据（通常是数组中的第一个元素）
+  if (data.data && data.data.length > 0) {
+    return data.data[0].ownership;
+  }
+  
+  return [];
 }
 
 /**

@@ -1,135 +1,140 @@
-import yahooFinance from 'yahoo-finance2';
-import { SupabaseService } from '../supabaseService';
+import yahooFinance from "yahoo-finance2";
+import { SupabaseService } from "../supabaseService";
 
-// 抑制关于historical()方法弃用的通知
-yahooFinance.suppressNotices(['ripHistorical']);
+yahooFinance.suppressNotices(["ripHistorical"]);
 
+// ── 日期工具（全部用 UTC，避免 23 变 22 的时区偏移） ──────────────────────────────
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 把任意输入（Date 或字符串）转换为“UTC 的 YYYY-MM-DD”键 */
+function toYMD(input: string | Date): string {
+  if (typeof input === "string") {
+    if (YMD_RE.test(input)) return input; // 已经是 YYYY-MM-DD
+    const d = new Date(input);
+    if (isNaN(d.getTime())) throw new Error(`Invalid date string: ${input}`);
+    return d.toISOString().slice(0, 10); // 用 UTC 截到日期
+  } else {
+    // Date → UTC 的 YYYY-MM-DD
+    return new Date(input).toISOString().slice(0, 10);
+  }
+}
+
+/** 在一个 YYYY-MM-DD 的基础上，用 UTC 方式加天数并返回 YYYY-MM-DD */
+function addDaysYMD(ymd: string, days: number): string {
+  if (!YMD_RE.test(ymd)) throw new Error(`Invalid YMD: ${ymd}`);
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+// ── 主函数 ──────────────────────────────────────────────────────────────────────
 /**
- * 为交易记录添加收盘价
- * @param symbol 股票代码
- * @param trades 交易记录数组
- * @returns 添加了收盘价的交易记录数组
+ * 为交易记录添加收盘价（逐日请求 Yahoo，先去重日期；所有日期用 UTC-YYYY-MM-DD）
  */
 export async function tradesWithClosePrice(symbol: string, trades: any[]) {
-  // 获取价格数据
-  console.log(`Fetching price data from database for ${symbol} for ${trades.length} trades`);
-  
-  // 如果没有交易数据，则直接返回
-  if (trades.length === 0) {
-    return trades;
-  }
-  
-  // 获取所有交易日期
-  const dates = trades.map(trade => new Date(trade.date));
-  const minDate = new Date(Math.min(...dates.map(date => date.getTime())));
-  const maxDate = new Date(Math.max(...dates.map(date => date.getTime())));
-  
-  // 格式化日期
-  const startDate = minDate.toISOString().split('T')[0];
-  const endDate = maxDate.toISOString().split('T')[0];
+  console.log(`Processing trades for symbol: ${symbol}`);
+  if (trades.length === 0) return [];
 
-  console.log(`Fetching price data from database for ${symbol} from ${startDate} to ${endDate}`);
-  
-  // 从数据库获取价格数据
+  // 1) 计算交易范围（仅用于一次性查询 DB）
+  const dateKeys = trades.map(t => toYMD(t.date));
+  const minYmd = dateKeys.reduce((a, b) => (a < b ? a : b));
+  const maxYmd = dateKeys.reduce((a, b) => (a > b ? a : b));
+  console.log(`Date range from trades (UTC YMD): ${minYmd} to ${maxYmd}`);
+  console.log(`Number of trades: ${trades.length}`);
+
+  // 2) 从数据库取已有价格（表的 date 是 DATE 类型，直接用 YYYY-MM-DD）
+  console.log(`Fetching price data from DB for ${symbol} from ${minYmd} to ${maxYmd}`);
   let dbPrices: any[] = [];
   try {
-    dbPrices = await SupabaseService.getDailyPricesByDateRange(symbol, startDate, endDate);
-    console.log(`Retrieved ${dbPrices.length} price records from database`);
-  } catch (error) {
-    console.error('Error fetching prices from database:', error);
+    // 保持你原来的方法名
+    dbPrices = await SupabaseService.getDailyPricesByDateRange(symbol, minYmd, maxYmd);
+    console.log(`Retrieved ${dbPrices.length} price records from DB`);
+  } catch (err) {
+    console.error("Error fetching prices from database:", err);
   }
 
-  // 创建日期到价格的映射，统一使用YYYY-MM-DD格式作为键
+  // 3) 构建 (YYYY-MM-DD → price) 映射（统一转为 UTC-YYYY-MM-DD 键）
   const priceMap = new Map<string, number>();
-  dbPrices.forEach(price => {
-    const normalizedDate = new Date(price.date).toISOString().split('T')[0];
-    priceMap.set(normalizedDate, price.price);
-  });
-
-  // 更新有数据库价格的交易记录
-  const tradesWithDbPrices = trades.map(trade => {
-    // 确保trade.date格式统一为YYYY-MM-DD
-    const normalizedTradeDate = new Date(trade.date).toISOString().split('T')[0];
-    
-    // 检查数据库中是否有该日期的价格
-    const dbPrice = priceMap.get(normalizedTradeDate);
-    if (dbPrice !== undefined) {
-      console.log(`Using database price for ${symbol} on ${normalizedTradeDate}: ${dbPrice}`);
-      return { ...trade, close: dbPrice };
-    }
-    
-    return trade;
-  });
-
-  // 找出仍然没有价格的交易记录
-  const tradesWithoutPrices = tradesWithDbPrices.filter(trade => trade.close === undefined);
-  
-  // 如果所有交易都有价格，直接返回
-  if (tradesWithoutPrices.length === 0) {
-    return tradesWithDbPrices;
+  for (const p of dbPrices) {
+    const key = typeof p.date === "string" && YMD_RE.test(p.date) ? p.date : toYMD(p.date);
+    priceMap.set(key, Number(p.price));
   }
 
-  // 为剩余的交易记录从Yahoo Finance获取价格
-  console.log(`Fetching ${tradesWithoutPrices.length} trades from Yahoo Finance`);
-  const pricesToInsert: any[] = [];
-  
-  const tradesWithNewPrices = await Promise.all(
-    tradesWithDbPrices.map(async (trade) => {
-      // 如果已经有价格，直接返回
-      if (trade.close !== undefined) {
-        return trade;
-      }
+  // 4) 先用 DB 结果回填
+  let enriched = trades.map(t => {
+    const key = toYMD(t.date);
+    const dbPrice = priceMap.get(key);
+    return dbPrice !== undefined ? { ...t, close: dbPrice } : { ...t };
+  });
 
-      // 确保trade.date格式统一为YYYY-MM-DD
-      const normalizedTradeDate = new Date(trade.date).toISOString().split('T')[0];
-
-      try {
-        // 创建结束日期（第二天）
-        const period1 = new Date(trade.date);
-        const period2 = new Date(period1);
-        period2.setDate(period2.getDate() + 1);
-
-        // 获取指定日期的股票数据
-        const stockData = await yahooFinance.chart(symbol, {
-          period1: period1.toISOString().split('T')[0],
-          period2: period2.toISOString().split('T')[0]
-        });
-
-        // 从返回数据中提取收盘价
-        if (stockData.quotes && stockData.quotes.length > 0) {
-          const closePrice = stockData.quotes[0].close;
-          console.log(`Fetched new data for ${symbol} on ${normalizedTradeDate}: ${closePrice}`);
-          
-          // 添加到待插入数据库的数组
-          pricesToInsert.push({
-            symbol: symbol,
-            date: normalizedTradeDate,
-            price: closePrice,
-            ts: Date.now()
-          });
-          
-          return { ...trade, close: closePrice };
-        } else {
-          console.log(`No stock data found for ${symbol} on ${normalizedTradeDate}`);
-        }
-      } catch (error) {
-        console.error(`Error fetching close price for ${symbol} on ${normalizedTradeDate}:`, error);
-      }
-      
-      return trade;
-    })
+  // 5) 找出缺少价格的唯一日期（UTC-YYYY-MM-DD 去重）
+  const missingDates = Array.from(
+    new Set(enriched.filter(t => t.close === undefined).map(t => toYMD(t.date)))
   );
 
-  // 将新获取的价格数据插入数据库
-  if (pricesToInsert.length > 0) {
+  if (missingDates.length === 0) {
+    console.log("All trades have prices from DB, done.");
+    return enriched;
+  }
+  console.log(`Need Yahoo data for ${missingDates.length} unique dates`);
+
+  // 6) 逐日请求 Yahoo（period1=当天, period2=次日；两者都用 UTC-YYYY-MM-DD）
+  const yahooData: Record<string, number> = {};
+  for (const ymd of missingDates) {
     try {
-      console.log(`Inserting ${pricesToInsert.length} price records into database`);
-      await SupabaseService.upsertDailyPrices(pricesToInsert);
-      console.log(`Successfully inserted ${pricesToInsert.length} price records into database`);
-    } catch (error) {
-      console.error('Error inserting prices into database:', error);
+      const next = addDaysYMD(ymd, 1);
+      const result = await yahooFinance.chart(symbol, {
+        period1: ymd,
+        period2: next,
+      });
+
+      if (result?.quotes?.length) {
+        // 取第一条（那天的收盘）
+        const q = result.quotes[0];
+        if (q?.close != null) {
+          yahooData[ymd] = Number(q.close);
+          console.log(`Yahoo: ${symbol} ${ymd} close=${q.close}`);
+        } else {
+          console.log(`Yahoo: ${symbol} ${ymd} no close in quotes[0]`);
+        }
+      } else {
+        console.log(`Yahoo: ${symbol} ${ymd} no quotes`);
+      }
+    } catch (err) {
+      console.error(`Error fetching Yahoo data for ${symbol} on ${ymd}:`, err);
     }
   }
 
-  return tradesWithNewPrices;
+  // 7) upsert 进 DB（去重，避免 ON CONFLICT 命中多次）
+  const pricesToInsert = Object.entries(yahooData).map(([date, price]) => ({
+    symbol,
+    date,     // 已是 YYYY-MM-DD
+    price,    // numeric
+    ts: Date.now(),
+  }));
+
+  if (pricesToInsert.length > 0) {
+    // 以 (symbol,date) 去重（理论上此处已唯一，但稳一手）
+    const uniq = Array.from(
+      new Map(pricesToInsert.map(p => [`${p.symbol}_${p.date}`, p])).values()
+    );
+
+    console.log(`Inserting ${uniq.length} new prices into DB`);
+    try {
+      await SupabaseService.upsertDailyPrices(uniq);
+      console.log(`Successfully inserted ${uniq.length} prices`);
+    } catch (err) {
+      console.error("Error inserting new prices into DB:", err);
+    }
+  }
+
+  // 8) 再次回填 Yahoo 获取的价格
+  enriched = enriched.map(t => {
+    if (t.close !== undefined) return t;
+    const key = toYMD(t.date);
+    const close = yahooData[key];
+    return close !== undefined ? { ...t, close } : t;
+  });
+
+  return enriched;
 }

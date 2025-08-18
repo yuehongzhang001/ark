@@ -1,16 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {fetchTrades, type Trade, fetchNote, saveNote } from "./service/client/tradeService";
+import { fetchTrades, fetchFundWeights, type Trade, type FundWeight, fetchNote, saveNote } from "./service/client/tradeService";
 import { SupabaseService } from "./service/supabaseService";
 
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [fundWeights, setFundWeights] = useState<FundWeight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fundWeightsLoading, setFundWeightsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [symbol, setSymbol] = useState(""); // 默认symbol将从数据库中获取
   const [year, setYear] = useState<string>("all");
   const [previousClose, setPreviousClose] = useState<number | null>(null);
+  const [prevCloseDate, setPrevCloseDate] = useState<string | null>(null);
   const [prevCloseLoading, setPrevCloseLoading] = useState(false);
   const [note, setNote] = useState("");
   const [noteLoading, setNoteLoading] = useState(false);
@@ -62,6 +65,22 @@ export default function Home() {
     }
   }, [symbol, year]);
 
+  const loadFundWeights = useCallback(async (symbol: string) => {
+    // 如果symbol为空，不执行任何操作
+    if (!symbol) return;
+    
+    try {
+      setFundWeightsLoading(true);
+      const weights = await fetchFundWeights(symbol);
+      setFundWeights(weights);
+    } catch (err) {
+      console.error("Error fetching fund weights for symbol:", symbol, err);
+      setFundWeights([]);
+    } finally {
+      setFundWeightsLoading(false);
+    }
+  }, []);
+
   const fetchPreviousClose = useCallback(async (symbol: string) => {
     // 如果symbol为空，不执行任何操作
     if (!symbol) return;
@@ -77,12 +96,15 @@ export default function Home() {
       if (response.ok) {
         const data = await response.json();
         setPreviousClose(data?.close || null);
+        setPrevCloseDate(data?.date || null);
       } else {
         setPreviousClose(null);
+        setPrevCloseDate(null);
       }
     } catch (err) {
       console.error("Error fetching previous close:", err);
       setPreviousClose(null);
+      setPrevCloseDate(null);
     } finally {
       setPrevCloseLoading(false);
     }
@@ -151,7 +173,8 @@ export default function Home() {
     fetchPreviousClose(symbol);
     loadNote(symbol);
     loadGlobalNote(); // 加载全局备注
-  }, [loadTrades, fetchPreviousClose, loadNote, loadGlobalNote, symbol, year]);
+    loadFundWeights(symbol); // 加载基金持仓权重
+  }, [loadTrades, fetchPreviousClose, loadNote, loadGlobalNote, loadFundWeights, symbol, year]);
 
   // 处理点击下拉列表外部区域的逻辑
   useEffect(() => {
@@ -483,11 +506,32 @@ export default function Home() {
             {prevCloseLoading ? (
               <span>加载中...</span>
             ) : previousClose !== null ? (
-              <span>昨日收盘价: {previousClose.toFixed(2)}</span>
+              <span>最近收盘价 ({prevCloseDate}): {previousClose.toFixed(2)}</span>
             ) : (
-              <span>无法获取昨日收盘价</span>
+              <span>无法获取最近收盘价</span>
             )}
           </div>
+        </div>
+        
+        {/* 基金持仓分布移到下一行 */}
+        <div className="mt-2">
+          {fundWeightsLoading ? (
+            <span className="text-gray-700">基金持仓数据加载中...</span>
+          ) : fundWeights.length > 0 ? (
+            <div className="text-gray-700">
+              <span className="font-semibold">基金持仓分布:</span>
+              <span className="ml-2">
+                {fundWeights.map((fundWeight, index) => (
+                  <span key={index}>
+                    {fundWeight.fund}: {fundWeight.weight.toFixed(2)}%
+                    {index < fundWeights.length - 1 && ", "}
+                  </span>
+                ))}
+              </span>
+            </div>
+          ) : (
+            <span className="text-gray-700">暂无基金持仓数据</span>
+          )}
         </div>
       </div>
 
@@ -580,20 +624,20 @@ export default function Home() {
                                 ? "bg-yellow-100" 
                                 : trade.direction === "Sell" 
                                   ? "bg-orange-100" 
-                                  : ""
+                                    : ""
                             }`}
                           >
                             {trade.direction || ""}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-300">{trade.close ? trade.close.toFixed(2) : ""}</td>
-                          <td className="py-3 px-4 border-b border-gray-300">{trade.shares || ""}</td>
-                          <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent || ""}</td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.shares?.toLocaleString() || ""}</td>
+                          <td className="py-3 px-4 border-b border-gray-300">{trade.etf_percent !== undefined ? trade.etf_percent.toFixed(2) : ""}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              )}
+          )}
         </>
       )}
     </div>
