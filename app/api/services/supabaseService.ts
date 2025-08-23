@@ -1,16 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
+import 'server-only';
 
 // Supabase project configuration from environment variables
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.ARK_SUPABASE_SERVICE_ROLE_KEY || '';
 
 // Validate that Supabase environment variables are set
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Supabase URL and Anon Key must be set in environment variables');
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Supabase URL and service role Key must be set in environment variables');
 }
-
 // Create a single supabase client for interacting with the database
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 /**
  * Service class for interacting with the daily_prices table in Supabase

@@ -1,5 +1,5 @@
 import yahooFinance from "yahoo-finance2";
-import { SupabaseService } from "../supabaseService";
+import { SupabaseService } from "./supabaseService";
 
 yahooFinance.suppressNotices(["ripHistorical"]);
 

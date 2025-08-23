@@ -13,6 +13,11 @@ export interface FundWeight {
   weight: number;
 }
 
+export interface StockSymbol {
+  symbol: string;
+  display_order: number;
+}
+
 interface TradesResponse {
   symbol: string;
   date_from: string;
@@ -26,6 +31,39 @@ interface FundOwnershipResponse {
     date: string;
     ownership: FundWeight[];
   }[];
+}
+
+/**
+ * Fetch all stock symbols
+ * @returns Array of stock symbols with display order
+ */
+export async function fetchStockSymbols(): Promise<StockSymbol[]> {
+  const response = await fetch('/api/symbols');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch stock symbols: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Update stock symbols display order
+ * @param symbols Array of stock symbols with new display order
+ * @returns Updated stock symbols
+ */
+export async function updateStockSymbolOrder(symbols: StockSymbol[]): Promise<StockSymbol[]> {
+  const response = await fetch('/api/symbols', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(symbols),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update stock symbol order: ${response.status} ${response.statusText}`);
+  }
+  
+  return response.json();
 }
 
 /**

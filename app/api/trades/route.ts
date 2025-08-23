@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { tradesWithClosePrice } from '../../service/server/tradesService';
+import { tradesWithClosePrice } from '../services/tradesService';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

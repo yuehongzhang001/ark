@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchTrades, fetchFundWeights, type Trade, type FundWeight, fetchNote, saveNote } from "./service/client/tradeService";
-import { SupabaseService } from "./service/supabaseService";
+import { fetchTrades, fetchFundWeights, type Trade, type FundWeight, fetchNote, saveNote, fetchStockSymbols, updateStockSymbolOrder } from "./client-services/tradeService";
 
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -198,7 +197,7 @@ export default function Home() {
     const loadStockData = async () => {
       try {
         // 获取股票符号和描述信息
-        const symbolsData = await SupabaseService.getStockSymbols();
+        const symbolsData = await fetchStockSymbols();
         
         if (symbolsData && symbolsData.length > 0) {
           // Sort symbols based on display_order
@@ -357,7 +356,7 @@ export default function Home() {
         display_order: index
       }));
       
-      await SupabaseService.updateStockSymbolOrder(symbolsWithOrder);
+      await updateStockSymbolOrder(symbolsWithOrder);
     } catch (err) {
       console.error("Error saving symbol order:", err);
     } finally {

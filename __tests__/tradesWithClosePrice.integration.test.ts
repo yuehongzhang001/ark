@@ -12,7 +12,7 @@ async function runTradesWithClosePriceIntegrationTest() {
     console.log('\nStarting tradesWithClosePrice integration test with .env.local variables...');
 
     // 动态导入 SupabaseService
-    const supabaseModule = await import('../app/service/supabaseService');
+    const supabaseModule = await import('../app/api/services/supabaseService');
     const { SupabaseService } = supabaseModule;
 
     // 测试数据
@@ -50,7 +50,7 @@ async function runTradesWithClosePriceIntegrationTest() {
     ];
 
     // 动态导入 tradesWithClosePrice 方法
-    const tradeModule = await import('../app/service/server/tradesService');
+    const tradeModule = await import('../app/api/services/tradesService');
     const tradesWithClosePrice: (symbol: string, trades: Trade[]) => Promise<Trade[]> = tradeModule.tradesWithClosePrice;
 
     // 调用待测方法
